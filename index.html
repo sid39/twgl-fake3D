@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]>      <html class="no-js"> <!--<![endif]-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>Three.js Fake 3D</title>
+    <meta name="description" content="" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!--[if lt IE 7]>
+      <p class="browsehappy">
+        You are using an <strong>outdated</strong> browser. Please
+        <a href="#">upgrade your browser</a> to improve your experience.
+      </p>
+    <![endif]-->
+    <canvas id="canvas"></canvas>
+    <!-- vertex shader -->
+    <script id="vs" type="f">
+      attribute vec2 position;
+      attribute vec2 texcoord;
+
+      uniform mat3 u_matrix;
+
+      varying vec2 v_texcoord;
+
+      void main() {
+        gl_Position = vec4(u_matrix * vec3(position, 1), 1);
+        v_texcoord = texcoord;
+      }
+    </script>
+    <!-- fragment shader -->
+    <script id="fs" type="f">
+      precision mediump float;
+
+      uniform vec2 u_mouse;
+
+      uniform sampler2D u_originalImage;
+      uniform sampler2D u_mapImage;
+
+      varying vec2 v_texcoord;
+
+      void main() {
+        vec4 depthDistortion = texture2D(u_mapImage, v_texcoord);
+        float parallaxMult = depthDistortion.r;
+
+        vec2 parallax = (u_mouse) * parallaxMult;
+
+        vec4 original = texture2D(u_originalImage, (v_texcoord + parallax));
+        gl_FragColor = original;
+      }
+    </script>
+    <script src="https://cdn.rawgit.com/greggman/twgl.js/master/dist/4.x/twgl-full.min.js"></script>
+    <script src="https://webglfundamentals.org/webgl/resources/m3.js"></script>
+    <script>
+      (function () {
+        // 建立webgl到canvas
+        const gl = document.getElementById("canvas").getContext("webgl");
+        //指派vertex shader & fragment shader
+        const programInfo = twgl.createProgramInfo(gl, ["vs", "fs"]);
+
+        if (!gl) return;
+
+        let sourceImage = { width: 1, height: 1 };
+        const originalImage = twgl.createTexture(gl,
+          {
+            src: "./dog.jpg",
+          },
+          (error, texture, source) => {
+            sourceImage = source;
+            //console.log(error, texture, source);
+          }
+        );
+
+        const imageBump = twgl.createTexture(gl, {
+          src: "./bump.jpg",
+        });
+        //createXYQuadBufferInfo(gl, size(opt):Defaults to 2, xOffset(opt) yOffset(opt))
+        const bufferInfo = twgl.primitives.createXYQuadBufferInfo(gl);
+
+        const mouse = [0, 0];
+        let nMouse = [0, 0];
+        let oMouse = [0, 0];
+
+        function render() {
+          twgl.resizeCanvasToDisplaySize(gl.canvas);
+          gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+          gl.clearColor(0, 0, 0, 0);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+          gl.useProgram(programInfo.program);
+          twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
+
+          const canvasAspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+          const imageAspect = sourceImage.width / sourceImage.height;
+          const mat = m3.scaling(imageAspect / canvasAspect, -1);
+
+          nMouse[0] += (mouse[0] - nMouse[0]) * 0.1;
+          nMouse[1] += (mouse[1] - nMouse[1]) * 0.1;
+
+          twgl.setUniforms(programInfo, {
+            u_matrix: mat,
+            u_originalImage: originalImage,
+            u_mapImage: imageBump,
+            u_mouse: nMouse,
+          });
+
+          twgl.drawBufferInfo(gl, bufferInfo);
+          requestAnimationFrame(render);
+        }
+        //-1.0 ~ 1.0
+        document.addEventListener("mousemove", (e) => {
+          mouse[0] = ((e.clientX / gl.canvas.clientWidth) * 2 - 1) * -0.03;
+          mouse[1] = ((e.clientY / gl.canvas.clientHeight) * 2 - 1) * -0.02;
+        });
+
+        document.addEventListener("touchmove", (e) => {
+          mouse[0] =
+            ((e.touches[0].clientX / gl.canvas.clientWidth) * 2 - 1) * -0.03;
+          mouse[1] =
+            ((e.touches[0].clientY / gl.canvas.clientHeight) * 2 - 1) * -0.02;
+        });
+
+        document.addEventListener("touchend", () => {
+          mouse[0] = 0;
+          mouse[1] = 0;
+        });
+
+        requestAnimationFrame(render);
+      })();
+    </script>
+  </body>
+</html>
